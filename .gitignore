@@ -13,3 +13,7 @@ node_modules/
 *.jsonl
 logs/
 npm-debug.log*
+
+# Local planning notes
+plan.md
+knowledgebase.md
