@@ -7,3 +7,9 @@ node_modules/
 .cross-agent-mcp-bridge/
 .crossagentbridge/
 .agent-room/
+
+# Logs
+*.log
+*.jsonl
+logs/
+npm-debug.log*
