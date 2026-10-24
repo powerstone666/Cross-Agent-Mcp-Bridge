@@ -1,4 +1,4 @@
-# Cross-Agent-Mcp-Bridge (ai-relay)
+# Cross-Agent-Mcp-Bridge
 
 ![Node.js](https://img.shields.io/badge/node-npm%20%2B%20tsx-339933)
 ![TypeScript](https://img.shields.io/badge/typescript-strict-3178c6)

@@ -10,7 +10,7 @@ import { CoordinationService } from "../../src/bridge/coordination-service.js";
 const exec = promisify(execFile);
 
 async function createRepository(): Promise<string> {
-  const path = await mkdtemp(join(tmpdir(), "ai-relay-coordination-"));
+  const path = await mkdtemp(join(tmpdir(), "cross-agent-mcp-bridge-coordination-"));
   await exec("git", ["init", path]);
   await exec("git", ["-C", path, "config", "user.email", "test@example.com"]);
   await exec("git", ["-C", path, "config", "user.name", "Test"]);
@@ -21,7 +21,7 @@ async function createRepository(): Promise<string> {
 }
 
 test("file claims serialize competing participants and can be released", async () => {
-  const repositoryPath = await mkdtemp(join(tmpdir(), "ai-relay-claims-"));
+  const repositoryPath = await mkdtemp(join(tmpdir(), "cross-agent-mcp-bridge-claims-"));
   try {
     const taskDirectory = join(repositoryPath, ".agent-room", "rooms", "backend", "tasks");
     await mkdir(taskDirectory, { recursive: true });
