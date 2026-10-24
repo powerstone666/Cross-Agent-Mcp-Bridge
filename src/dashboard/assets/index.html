@@ -1,0 +1,827 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#121318">
+    <title>Cross-Agent-Mcp-Bridge · Workspace Dashboard</title>
+    <link rel="stylesheet" href="/dashboard.css">
+    <script src="/dashboard.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <!-- Sidebar Navigation -->
+      <aside class="sidebar" aria-label="Workspace Navigation">
+        <div class="sidebar-header">
+          <a class="brand" href="#overview" aria-label="Cross-Agent-Mcp-Bridge Home">
+            <span class="brand-symbol" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2"></rect>
+                <line x1="8" y1="21" x2="16" y2="21"></line>
+                <line x1="12" y1="17" x2="12" y2="21"></line>
+                <circle cx="7" cy="8" r="1.5" fill="currentColor"></circle>
+                <circle cx="17" cy="8" r="1.5" fill="currentColor"></circle>
+                <path d="M9 13c1.5 1 4.5 1 6 0"></path>
+              </svg>
+            </span>
+            <div class="brand-text">
+              <span class="brand-name">Cross-Agent-Mcp-Bridge</span>
+              <span class="brand-tagline">AI Orchestration Mesh</span>
+            </div>
+          </a>
+        </div>
+
+        <div class="workspace-card">
+          <div class="workspace-monogram" id="workspace-monogram" aria-hidden="true">—</div>
+          <div class="workspace-details">
+            <span class="workspace-name" id="sidebar-workspace">Loading workspace…</span>
+            <span class="room-pill" id="sidebar-room">Room: —</span>
+          </div>
+        </div>
+
+        <nav class="primary-nav" aria-label="Main sections">
+          <button type="button" class="nav-link active" data-view="overview">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="9" rx="1.5"></rect>
+                <rect x="14" y="3" width="7" height="5" rx="1.5"></rect>
+                <rect x="14" y="12" width="7" height="9" rx="1.5"></rect>
+                <rect x="3" y="16" width="7" height="5" rx="1.5"></rect>
+              </svg>
+            </span>
+            <span>Command Center</span>
+          </button>
+
+          <button type="button" class="nav-link" data-view="tasks">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 11l3 3L22 4"></path>
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+              </svg>
+            </span>
+            <span>Tasks Board</span>
+            <span class="nav-badge" id="nav-task-count">0</span>
+          </button>
+
+          <button type="button" class="nav-link" data-view="agents">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+            </span>
+            <span>Agent Fleet</span>
+            <span class="nav-badge" id="nav-agent-count">0</span>
+          </button>
+
+          <button type="button" class="nav-link" data-view="activity">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+            </span>
+            <span>Live Stream</span>
+          </button>
+
+          <button type="button" class="nav-link" data-view="coordination">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+              </svg>
+            </span>
+            <span>File Claims & Git</span>
+            <span class="nav-badge" id="nav-claims-count">0</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="connection-status-card" id="connection-card">
+            <span class="live-pulse" id="connection-dot" aria-hidden="true"></span>
+            <div class="connection-copy">
+              <strong id="connection-label">Connecting…</strong>
+              <small id="connection-subtext">SSE live stream</small>
+            </div>
+          </div>
+          <button class="icon-button" id="theme-toggle" type="button" aria-label="Toggle visual theme" title="Toggle dark/light theme">
+            <svg id="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+          </button>
+        </div>
+      </aside>
+
+      <!-- Main Content Area -->
+      <main class="main-content">
+        <!-- Top Toolbar -->
+        <header class="top-bar">
+          <div class="bar-left">
+            <div class="workspace-breadcrumb">
+              <span class="text-secondary">Workspace</span>
+              <span class="sep" aria-hidden="true">/</span>
+              <strong id="breadcrumb-workspace">Loading…</strong>
+              <span class="sep" aria-hidden="true">/</span>
+              <span class="room-chip" id="breadcrumb-room">backend</span>
+            </div>
+          </div>
+
+          <div class="bar-right">
+            <span class="last-sync" id="last-updated">Waiting for sync</span>
+            <button class="btn btn-tonal btn-sm" id="btn-refresh" type="button" title="Refresh state from relay">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+              <span>Refresh</span>
+            </button>
+            <button class="btn btn-tonal btn-sm" id="btn-quick-dispatch" type="button" title="Open agent command runner">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+              <span>Dispatch Prompt</span>
+            </button>
+            <button class="btn btn-primary btn-sm" id="btn-new-task" type="button">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              <span>New Task</span>
+            </button>
+          </div>
+        </header>
+
+        <!-- Human Approval Attention Banner (Displayed dynamically when pending) -->
+        <section class="approvals-banner" id="approvals-banner" hidden aria-live="assertive">
+          <div class="banner-header">
+            <div class="banner-title-group">
+              <span class="warning-icon-wrapper" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                  <line x1="12" y1="9" x2="12" y2="13"></line>
+                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+              </span>
+              <div>
+                <h2>Human Approval Required</h2>
+                <p class="banner-subtitle">An agent paused execution to request permission for file or shell operations.</p>
+              </div>
+            </div>
+            <span class="badge-alert" id="pending-approvals-count">0 pending</span>
+          </div>
+          <div class="approval-cards-container" id="approval-cards-container">
+            <!-- Rendered by JS -->
+          </div>
+        </section>
+
+        <!-- Dynamic View 1: Command Center (Overview) -->
+        <section class="view-panel active" id="view-overview" aria-label="Command Center">
+          <!-- Metric Highlights Grid -->
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <div class="metric-icon metric-agents">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+              </div>
+              <div class="metric-body">
+                <span class="metric-label">CONNECTED AGENTS</span>
+                <div class="metric-value-row">
+                  <strong class="metric-value" id="metric-connected-agents">0</strong>
+                  <span class="metric-sub" id="metric-total-agents">of 0 registered</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <div class="metric-icon metric-tasks">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                </svg>
+              </div>
+              <div class="metric-body">
+                <span class="metric-label">ACTIVE TASKS</span>
+                <div class="metric-value-row">
+                  <strong class="metric-value" id="metric-active-tasks">0</strong>
+                  <span class="metric-sub" id="metric-done-tasks">0 completed</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <div class="metric-icon metric-claims">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+              </div>
+              <div class="metric-body">
+                <span class="metric-label">FILE LOCK CLAIMS</span>
+                <div class="metric-value-row">
+                  <strong class="metric-value" id="metric-active-claims">0</strong>
+                  <span class="metric-sub">cooperative locks</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <div class="metric-icon metric-activity">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+              </div>
+              <div class="metric-body">
+                <span class="metric-label">ROOM ACTIVITY</span>
+                <div class="metric-value-row">
+                  <strong class="metric-value" id="metric-events-count">0</strong>
+                  <span class="metric-sub">events recorded</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dual Column Workbench -->
+          <div class="workbench-layout">
+            <!-- Left: Quick Dispatch & Active Tasks -->
+            <div class="workbench-column primary-column">
+              <!-- Inline Agent Command Console -->
+              <div class="panel-card console-card">
+                <div class="panel-header">
+                  <div class="panel-title-group">
+                    <span class="panel-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="4 17 10 11 4 5"></polyline>
+                        <line x1="12" y1="19" x2="20" y2="19"></line>
+                      </svg>
+                    </span>
+                    <h3>Direct Agent Dispatch</h3>
+                  </div>
+                  <span class="hint-text">Target any agent with <code>@agent &lt;instruction&gt;</code></span>
+                </div>
+                <div class="console-body">
+                  <!-- Custom Dropdowns Toolbar -->
+                  <div class="console-toolbar">
+                    <!-- Custom Agent Selector -->
+                    <div class="custom-dropdown" id="dropdown-dispatch-agent">
+                      <button type="button" class="custom-dropdown-trigger" aria-haspopup="listbox" aria-expanded="false">
+                        <span class="dropdown-trigger-prefix">Agent:</span>
+                        <span class="dropdown-trigger-val" id="val-dispatch-agent">Auto (@agent)</span>
+                        <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                      </button>
+                      <div class="custom-dropdown-panel" role="listbox">
+                        <div class="dropdown-search-box">
+                          <input type="search" placeholder="Filter agents…" aria-label="Filter agents">
+                        </div>
+                        <div class="dropdown-options-list" id="opts-dispatch-agent"></div>
+                      </div>
+                    </div>
+
+                    <!-- Custom Skill Selector -->
+                    <div class="custom-dropdown" id="dropdown-dispatch-skill">
+                      <button type="button" class="custom-dropdown-trigger" aria-haspopup="listbox" aria-expanded="false">
+                        <span class="dropdown-trigger-prefix">Skill:</span>
+                        <span class="dropdown-trigger-val" id="val-dispatch-skill">None</span>
+                        <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                      </button>
+                      <div class="custom-dropdown-panel" role="listbox">
+                        <div class="dropdown-search-box">
+                          <input type="search" placeholder="Search skills…" aria-label="Search skills">
+                        </div>
+                        <div class="dropdown-options-list" id="opts-dispatch-skill"></div>
+                      </div>
+                    </div>
+
+                    <!-- Custom Rule Selector -->
+                    <div class="custom-dropdown" id="dropdown-dispatch-rule">
+                      <button type="button" class="custom-dropdown-trigger" aria-haspopup="listbox" aria-expanded="false">
+                        <span class="dropdown-trigger-prefix">Rule:</span>
+                        <span class="dropdown-trigger-val" id="val-dispatch-rule">None</span>
+                        <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                      </button>
+                      <div class="custom-dropdown-panel" role="listbox">
+                        <div class="dropdown-search-box">
+                          <input type="search" placeholder="Search rules…" aria-label="Search rules">
+                        </div>
+                        <div class="dropdown-options-list" id="opts-dispatch-rule"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Selected Modifiers Chips Bar -->
+                  <div class="selected-modifiers-bar" id="selected-modifiers-bar" hidden>
+                    <span class="modifiers-label">Active context:</span>
+                    <div class="modifiers-chips" id="modifiers-chips"></div>
+                    <button type="button" class="btn-clear-modifiers" id="btn-clear-modifiers">Clear all</button>
+                  </div>
+
+                  <form id="dispatch-form" class="dispatch-form">
+                    <div class="dispatch-input-row">
+                      <input type="text" id="dispatch-input" class="form-input" placeholder="e.g. @codex verify recent changes in auth tests" autocomplete="off" required>
+                      <button type="submit" class="btn btn-primary" id="dispatch-submit-btn">
+                        <span class="btn-text">Send</span>
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <line x1="22" y1="2" x2="11" y2="13"></line>
+                          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                      </button>
+                    </div>
+                  </form>
+                  <div class="console-output-box" id="dispatch-output-box" hidden>
+                    <div class="console-output-header">
+                      <span class="output-status" id="dispatch-output-status">Running turn…</span>
+                      <button type="button" class="btn-text-sm" id="btn-clear-output">Clear</button>
+                    </div>
+                    <pre class="console-pre" id="dispatch-output-pre"></pre>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Active Tasks Preview -->
+              <div class="panel-card">
+                <div class="panel-header">
+                  <div class="panel-title-group">
+                    <span class="panel-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                      </svg>
+                    </span>
+                    <h3>Active Room Tasks</h3>
+                  </div>
+                  <button type="button" class="btn btn-tonal btn-sm" data-goto-view="tasks">View All Tasks</button>
+                </div>
+                <div class="task-list" id="overview-task-list">
+                  <p class="loading-state">Loading tasks…</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Agent Fleet Status & Activity Stream Preview -->
+            <div class="workbench-column secondary-column">
+              <!-- Agents List Card -->
+              <div class="panel-card">
+                <div class="panel-header">
+                  <div class="panel-title-group">
+                    <span class="panel-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="2" y1="12" x2="22" y2="12"></line>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                      </svg>
+                    </span>
+                    <h3>Agent Fleet</h3>
+                  </div>
+                  <span class="metric-badge" id="overview-agents-count">0 active</span>
+                </div>
+                <div class="agent-compact-list" id="overview-agent-list">
+                  <p class="loading-state">Scanning agents…</p>
+                </div>
+              </div>
+
+              <!-- Real-time Activity Preview -->
+              <div class="panel-card">
+                <div class="panel-header">
+                  <div class="panel-title-group">
+                    <span class="panel-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                      </svg>
+                    </span>
+                    <h3>Live Activity</h3>
+                  </div>
+                  <button type="button" class="btn btn-tonal btn-sm" data-goto-view="activity">Open Stream</button>
+                </div>
+                <ol class="activity-feed" id="overview-activity-list">
+                  <li class="loading-state">Awaiting room events…</li>
+                </ol>
+              </div>
+
+              <!-- Connection Diagnostics Card -->
+              <details class="diagnostics-card">
+                <summary>
+                  <span class="summary-left">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="3"></circle>
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                    <span>Relay Endpoints & Diagnostics</span>
+                  </span>
+                  <span class="chevron" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </span>
+                </summary>
+                <div class="diagnostics-content" id="endpoint-list"></div>
+              </details>
+            </div>
+          </div>
+        </section>
+
+        <!-- Dynamic View 2: Tasks Board -->
+        <section class="view-panel" id="view-tasks" aria-label="Tasks Board" hidden>
+          <div class="view-header">
+            <div>
+              <h2>Tasks Board</h2>
+              <p class="view-subheading">Track, assign, and transition work across AI agents.</p>
+            </div>
+            <div class="view-actions">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input type="search" id="task-search-input" placeholder="Search tasks…" aria-label="Search tasks">
+              </div>
+
+              <!-- Custom Filter by Skill -->
+              <div class="custom-dropdown" id="dropdown-filter-skill">
+                <button type="button" class="custom-dropdown-trigger" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="dropdown-trigger-prefix">Skill:</span>
+                  <span class="dropdown-trigger-val" id="val-filter-skill">All Skills</span>
+                  <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+                <div class="custom-dropdown-panel dropdown-align-right" role="listbox">
+                  <div class="dropdown-search-box">
+                    <input type="search" placeholder="Filter by skill…" aria-label="Filter by skill">
+                  </div>
+                  <div class="dropdown-options-list" id="opts-filter-skill"></div>
+                </div>
+              </div>
+
+              <!-- Custom Filter by Rule -->
+              <div class="custom-dropdown" id="dropdown-filter-rule">
+                <button type="button" class="custom-dropdown-trigger" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="dropdown-trigger-prefix">Rule:</span>
+                  <span class="dropdown-trigger-val" id="val-filter-rule">All Rules</span>
+                  <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+                <div class="custom-dropdown-panel dropdown-align-right" role="listbox">
+                  <div class="dropdown-search-box">
+                    <input type="search" placeholder="Filter by rule…" aria-label="Filter by rule">
+                  </div>
+                  <div class="dropdown-options-list" id="opts-filter-rule"></div>
+                </div>
+              </div>
+
+              <!-- Custom Filter by Agent -->
+              <div class="custom-dropdown" id="dropdown-filter-agent">
+                <button type="button" class="custom-dropdown-trigger" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="dropdown-trigger-prefix">Agent:</span>
+                  <span class="dropdown-trigger-val" id="val-filter-agent">All Agents</span>
+                  <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+                <div class="custom-dropdown-panel dropdown-align-right" role="listbox">
+                  <div class="dropdown-search-box">
+                    <input type="search" placeholder="Filter by agent…" aria-label="Filter by agent">
+                  </div>
+                  <div class="dropdown-options-list" id="opts-filter-agent"></div>
+                </div>
+              </div>
+
+              <button class="btn btn-primary" id="btn-create-task-modal">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span>Create Task</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Kanban Board -->
+          <div class="kanban-grid">
+            <!-- Open Column -->
+            <div class="kanban-column" data-status="open">
+              <div class="column-header">
+                <div class="col-title">
+                  <span class="col-dot dot-open" aria-hidden="true"></span>
+                  <h3>Open</h3>
+                </div>
+                <span class="col-count" id="count-open">0</span>
+              </div>
+              <div class="column-cards" id="col-open-cards"></div>
+            </div>
+
+            <!-- In Progress Column -->
+            <div class="kanban-column" data-status="in_progress">
+              <div class="column-header">
+                <div class="col-title">
+                  <span class="col-dot dot-progress" aria-hidden="true"></span>
+                  <h3>In Progress</h3>
+                </div>
+                <span class="col-count" id="count-in_progress">0</span>
+              </div>
+              <div class="column-cards" id="col-progress-cards"></div>
+            </div>
+
+            <!-- Review Column -->
+            <div class="kanban-column" data-status="review">
+              <div class="column-header">
+                <div class="col-title">
+                  <span class="col-dot dot-review" aria-hidden="true"></span>
+                  <h3>Review</h3>
+                </div>
+                <span class="col-count" id="count-review">0</span>
+              </div>
+              <div class="column-cards" id="col-review-cards"></div>
+            </div>
+
+            <!-- Done Column -->
+            <div class="kanban-column" data-status="done">
+              <div class="column-header">
+                <div class="col-title">
+                  <span class="col-dot dot-done" aria-hidden="true"></span>
+                  <h3>Done</h3>
+                </div>
+                <span class="col-count" id="count-done">0</span>
+              </div>
+              <div class="column-cards" id="col-done-cards"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Dynamic View 3: Agent Fleet -->
+        <section class="view-panel" id="view-agents" aria-label="Agent Fleet" hidden>
+          <div class="view-header">
+            <div>
+              <h2>Agent Fleet & Connectors</h2>
+              <p class="view-subheading">Connected AI agents ready to receive dispatched prompts or subtasks.</p>
+            </div>
+          </div>
+
+          <div class="agents-grid" id="full-agent-grid">
+            <!-- Rendered by JS -->
+          </div>
+        </section>
+
+        <!-- Dynamic View 4: Live Activity Stream -->
+        <section class="view-panel" id="view-activity" aria-label="Live Stream" hidden>
+          <div class="view-header">
+            <div>
+              <h2>Room Activity Stream</h2>
+              <p class="view-subheading">Immutable append-only audit feed of all room changes, messages, and approvals.</p>
+            </div>
+            <div class="view-actions">
+              <div class="filter-chips" id="activity-filter-chips">
+                <button type="button" class="chip active" data-filter="all">All Events</button>
+                <button type="button" class="chip" data-filter="task">Tasks</button>
+                <button type="button" class="chip" data-filter="message">Messages</button>
+                <button type="button" class="chip" data-filter="file">Files</button>
+                <button type="button" class="chip" data-filter="agent">Agents</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Post Room Message Composer -->
+          <div class="panel-card post-note-card">
+            <form id="room-message-form" class="room-message-form">
+              <input type="text" id="room-message-input" class="form-input" placeholder="Broadcast a coordination note to the room…" required>
+              <button type="submit" class="btn btn-primary" id="room-message-btn">
+                <span>Post Note</span>
+              </button>
+            </form>
+          </div>
+
+          <ol class="activity-feed full-feed" id="full-activity-feed">
+            <li class="loading-state">Loading room feed…</li>
+          </ol>
+        </section>
+
+        <!-- Dynamic View 5: Coordination & File Claims -->
+        <section class="view-panel" id="view-coordination" aria-label="File Claims & Git Coordination" hidden>
+          <div class="view-header">
+            <div>
+              <h2>File Claims & Git Worktrees</h2>
+              <p class="view-subheading">Cooperative locking to prevent agents from editing the same files concurrently.</p>
+            </div>
+            <div class="view-actions">
+              <button class="btn btn-primary" id="btn-open-claim-modal">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+                <span>Claim File</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="coordination-tables">
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3>Active File Claims</h3>
+              </div>
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>File Path</th>
+                      <th>Participant</th>
+                      <th>Task ID</th>
+                      <th>Claimed At</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="claims-table-body">
+                    <tr><td colspan="5" class="loading-state">Scanning active claims…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3>Task Git Worktrees</h3>
+              </div>
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Task ID</th>
+                      <th>Branch</th>
+                      <th>Worktree Path</th>
+                    </tr>
+                  </thead>
+                  <tbody id="worktrees-table-body">
+                    <tr><td colspan="3" class="loading-state">Scanning Git worktrees…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- Modal 1: Create Task Dialog -->
+    <dialog class="modal-dialog" id="create-task-dialog">
+      <div class="modal-surface">
+        <div class="modal-header">
+          <h3>Create New Room Task</h3>
+          <button type="button" class="btn-close" id="btn-close-task-modal" aria-label="Close dialog">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <form id="create-task-form">
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="task-title-input">Task Title <span class="required">*</span></label>
+              <input type="text" id="task-title-input" class="form-input" placeholder="e.g. Implement refresh token rotation in auth service" required>
+            </div>
+
+            <div class="form-group">
+              <label for="task-desc-input">Description / Details</label>
+              <textarea id="task-desc-input" class="form-textarea" rows="4" placeholder="Detailed requirements, criteria, edge cases…"></textarea>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Assign to Agent</label>
+                <div class="custom-dropdown" id="dropdown-task-assignee">
+                  <button type="button" class="custom-dropdown-trigger" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="dropdown-trigger-val" id="val-task-assignee">Unassigned</span>
+                    <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </button>
+                  <div class="custom-dropdown-panel" role="listbox">
+                    <div class="dropdown-options-list" id="opts-task-assignee"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="task-files-input">Files (comma separated)</label>
+                <input type="text" id="task-files-input" class="form-input" placeholder="src/auth.ts, tests/auth.test.ts">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Require Skill</label>
+                <div class="custom-dropdown" id="dropdown-task-skill">
+                  <button type="button" class="custom-dropdown-trigger" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="dropdown-trigger-val" id="val-task-skill">None</span>
+                    <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </button>
+                  <div class="custom-dropdown-panel" role="listbox">
+                    <div class="dropdown-options-list" id="opts-task-skill"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Enforce Rule</label>
+                <div class="custom-dropdown" id="dropdown-task-rule">
+                  <button type="button" class="custom-dropdown-trigger" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="dropdown-trigger-val" id="val-task-rule">None</span>
+                    <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </button>
+                  <div class="custom-dropdown-panel" role="listbox">
+                    <div class="dropdown-options-list" id="opts-task-rule"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-tonal" id="btn-cancel-task">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="btn-save-task">
+              <span>Create Task</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+
+    <!-- Modal 2: Claim File Dialog -->
+    <dialog class="modal-dialog" id="claim-file-dialog">
+      <div class="modal-surface">
+        <div class="modal-header">
+          <h3>Claim File for Coordination</h3>
+          <button type="button" class="btn-close" id="btn-close-claim-modal" aria-label="Close dialog">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <form id="claim-file-form">
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="claim-filepath-input">File Path <span class="required">*</span></label>
+              <input type="text" id="claim-filepath-input" class="form-input" placeholder="src/bridge/bridge-service.ts" required>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Associated Task <span class="required">*</span></label>
+                <div class="custom-dropdown" id="dropdown-claim-task">
+                  <button type="button" class="custom-dropdown-trigger" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="dropdown-trigger-val" id="val-claim-task">Select task…</span>
+                    <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </button>
+                  <div class="custom-dropdown-panel" role="listbox">
+                    <div class="dropdown-search-box">
+                      <input type="search" placeholder="Filter tasks…" aria-label="Filter tasks">
+                    </div>
+                    <div class="dropdown-options-list" id="opts-claim-task"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Participant / Agent</label>
+                <div class="custom-dropdown" id="dropdown-claim-agent">
+                  <button type="button" class="custom-dropdown-trigger" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="dropdown-trigger-val" id="val-claim-agent">Default participant</span>
+                    <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </button>
+                  <div class="custom-dropdown-panel" role="listbox">
+                    <div class="dropdown-search-box">
+                      <input type="search" placeholder="Filter agents…" aria-label="Filter agents">
+                    </div>
+                    <div class="dropdown-options-list" id="opts-claim-agent"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-tonal" id="btn-cancel-claim">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="btn-save-claim">
+              <span>Claim File</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+
+    <!-- Floating Toast Notification System -->
+    <div class="toast-container" id="toast-container" aria-live="polite"></div>
+  </body>
+</html>

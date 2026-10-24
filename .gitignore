@@ -1,0 +1,9 @@
+node_modules/
+.DS_Store
+.env
+.env.*
+
+# Relay runtime data: message logs, IDE sockets and room state
+.cross-agent-mcp-bridge/
+.crossagentbridge/
+.agent-room/
