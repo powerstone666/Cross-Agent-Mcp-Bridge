@@ -202,7 +202,7 @@ Restart VS Code after applying. To configure one agent, add `--agent codex`, `--
 | Codex | `@codex` | Yes: own Codex process; the relay answers action approvals | Yes: wrapper set through `chatgpt.cliExecutable` | Real Codex (live) and a fake server |
 | Claude Code | `@claude` | Yes: `claude -p` over stream-json; the relay answers action approvals | Yes: wrapper set through `claudeCode.claudeProcessWrapper` | Fake `claude` only |
 | GitHub Copilot | `@copilot` | No (no safe non-interactive approval flow) | Yes: VS Code Agent Host protocol; approvals stay in VS Code | Fake agent host only |
-| Gemini | `@gemini` | Yes: Gemini CLI over ACP; the relay answers action approvals | Yes: the open Antigravity window's local hub | Antigravity route live; CLI route fake only |
+| Gemini | `@gemini` | Yes: Gemini CLI over ACP; the relay answers action approvals | Yes: the open Antigravity window's local hub; the relay answers permission and command prompts | Antigravity route live; CLI route fake only |
 
 How the route is chosen:
 
@@ -265,7 +265,7 @@ Write messages so they stand alone. The other agent does **not** see your conver
 | `send_room_message` | Share a concise update or handoff. |
 | `publish_knowledge` / `search_knowledge` | Save and search reusable context. |
 | `publish_decision` / `list_room_decisions` | Record and read settled choices. |
-| `invite_to_room` | Post an invitation and wake another agent; optional `task` creates an assigned task first. |
+| `invite_to_room` | Post an invitation and wake another agent in the room's repository; optional `task` creates an assigned task first. Returns once the agent starts; its final reply is posted in the room (`waitForReply: true` waits instead). |
 | `list_invitable_agents` | Show who is in the room, interrupted, disconnected, or free to invite. |
 
 Room messages alone never wake an agent. `invite_to_room` posts the message **and** sends the agent a relay turn.
@@ -380,16 +380,19 @@ Set these in the shell that runs `npm run mcp`.
 | `RELAY_AGENT_ROOM` | Suggested room name. Default: `backend`. |
 | `RELAY_COORDINATOR_AGENT` | Which agent coordinates new rooms. Default: first available. |
 | `RELAY_AGENT_NAME` | Participant name the relay itself uses in rooms. Default: `cross-agent-mcp-bridge`. |
-| `RELAY_CODEX_MODE` | `cli` (default) or `ide`. |
+| `RELAY_CODEX_MODE` | `cli` or `ide`. Over MCP, when unset, each turn uses the IDE whenever it is open (so you can watch it in the window that has the turn's repository open) and the CLI otherwise; set `cli` or `ide` to force one. |
 | `RELAY_CODEX_BINARY` | Path to the Codex program. |
 | `RELAY_CODEX_IDE_SOCKET_DIRECTORY` | Where the Codex IDE wrapper's sockets live. |
 | `RELAY_CODEX_APPROVAL_POLICY` / `RELAY_CODEX_SANDBOX` | Sent to Codex only if set; otherwise Codex applies your own defaults. |
-| `RELAY_CLAUDE_MODE` | `cli` or `ide`. |
+| `RELAY_CLAUDE_MODE` | `cli` or `ide`. Over MCP, when unset, each turn uses the IDE whenever it is open (so you can watch it in the window that has the turn's repository open) and the CLI otherwise; set `cli` or `ide` to force one. In the IDE, Claude's approval prompts show in the Claude Code panel, and a relay turn waits while you are mid-turn. |
 | `RELAY_CLAUDE_BINARY` | Path to the Claude CLI. |
 | `RELAY_CLAUDE_IDE_SOCKET_DIRECTORY` | Where the Claude IDE wrapper's sockets live. |
 | `RELAY_COPILOT_SESSION_ID` | Choose the Copilot session when several windows are active. |
 | `RELAY_COPILOT_ENDPOINT_DIRECTORY` | Override where the VS Code Agent Host is discovered. |
-| `RELAY_GEMINI_MODE` | `cli` or `ide`. |
+| `RELAY_GEMINI_MODE` | `cli` or `ide`. Over MCP, when unset, each turn uses the IDE whenever it is open (so you can watch it in the window that has the turn's repository open) and the CLI otherwise; set `cli` or `ide` to force one. |
+| `RELAY_SHOW_IN_IDE` | `0` stops the relay from bringing a new Codex thread or Antigravity conversation to the front. By default the relay focuses the VS Code window that has the repository open and opens the conversation there. |
+| `RELAY_IDE_URI_SCHEME` | Link scheme for opening conversations, `vscode` by default (for example `vscode-insiders`). |
+| `RELAY_IDE_CLI` | Command that focuses a window by folder, `code` by default. |
 | `RELAY_GEMINI_BINARY` | Path to the Gemini CLI. |
 | `RELAY_GEMINI_ACP_FLAG` | Override the CLI flag used for the Agent Client Protocol. |
 | `RELAY_GEMINI_APPROVAL_MODE` | Gemini approval mode; otherwise Gemini's default. |

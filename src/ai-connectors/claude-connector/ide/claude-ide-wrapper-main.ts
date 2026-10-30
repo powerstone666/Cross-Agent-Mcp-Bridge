@@ -22,6 +22,8 @@ async function main(): Promise<void> {
     environment: process.env,
     // One socket per wrapper process, so several VS Code windows do not clash.
     socketPath: join(resolveClaudeIdeSocketDirectory({ environment: process.env }), `${process.pid}.sock`),
+    // The extension starts Claude in the window's workspace folder.
+    workspaceFolder: process.cwd(),
     extensionInput: stdin,
     extensionOutput: stdout,
   });

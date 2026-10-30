@@ -19,6 +19,8 @@ import type {
 import { createAsyncQueue } from "../../../bridge/utils/create-async-queue.js";
 import { isRecord } from "../../../bridge/utils/is-record.js";
 import { checkPrivateDirectory } from "../../../bridge/utils/check-private-directory.js";
+import { contains, orderSocketsForFolder, readWrapperWorkspace } from "../../../bridge/utils/ide-wrapper-workspace.js";
+import type { ShowInIde } from "../../../bridge/utils/show-in-ide.js";
 
 // The wrapper names its socket <pid>.sock (see codex-ide-wrapper-main.ts).
 const SOCKET_FILE_SUFFIX = ".sock";
@@ -27,15 +29,20 @@ export interface CodexIdeAdapterOptions {
   socketDirectoryPath: string;
   // Lets the wrapper start a thread when the IDE has none open.
   newThreadParams: NewThreadParams;
+  // Opens a relay thread in the Codex panel; does nothing when left out.
+  showInIde?: ShowInIde;
 }
 
 // The IDE shows the turn live and asks the human for approvals.
 export class CodexIdeAdapter implements AgentAdapter {
+  // Threads already brought to the front, so each is opened once, not on every turn.
+  private readonly shownThreadIds = new Set<string>();
+
   constructor(private readonly options: CodexIdeAdapterOptions) {}
 
   // A connection serves one turn only.
   async *run(request: AgentTurnRequest): AsyncGenerator<AgentEvent> {
-    const socket = await this.connectToNewestWrapper();
+    const { socket, windowFolder } = await this.connectToWrapper(request.workingDirectory);
     // Replies with a different id belong to another client and are ignored.
     const requestId = randomUUID();
     const events = createAsyncQueue<AgentEvent>();
@@ -48,7 +55,9 @@ export class CodexIdeAdapter implements AgentAdapter {
       const message = parseServerMessage(line);
       // Ignore invalid lines and replies for other requests. They must not fail the turn.
       if (!message || ("requestId" in message && message.requestId !== requestId)) return;
-      if (message.type === "delta") {
+      if (message.type === "accepted") {
+        this.showThread({ threadId: message.threadId, windowFolder });
+      } else if (message.type === "delta") {
         events.push({ kind: "reply_delta", text: message.text });
       } else if (message.type === "error") {
         events.push({ kind: "error", text: message.message });
@@ -71,7 +80,7 @@ export class CodexIdeAdapter implements AgentAdapter {
         type: "send",
         requestId,
         text: request.messageText,
-        newThreadParams: this.options.newThreadParams,
+        newThreadParams: this.threadParamsFor(request.workingDirectory),
       });
       // An already-cancelled signal never fires "abort", so check it here.
       if (request.signal.aborted) interruptTurn();
@@ -99,15 +108,31 @@ export class CodexIdeAdapter implements AgentAdapter {
     return { mode: "ide", ideWrapperRunning: liveConnections.length > 0 };
   }
 
+  // A turn for another repository, such as a room's, opens its thread there instead of the IDE workspace.
+  private threadParamsFor(workingDirectory: string): NewThreadParams {
+    const params = this.options.newThreadParams;
+    return workingDirectory === params.cwd ? params : { ...params, cwd: workingDirectory, preferIdeWorkspace: false };
+  }
+
   // Nothing to do: each run() closes its own socket.
   close(): void {}
 
-  // The newest wrapper most likely belongs to the VS Code window the user is looking at.
-  private async connectToNewestWrapper(): Promise<Socket> {
-    const socketPaths = await this.listSocketPathsNewestFirst();
+  // The panel may not list a thread the relay started, so open it by link the first time.
+  private showThread({ threadId, windowFolder }: { threadId: string; windowFolder: string | undefined }): void {
+    if (this.shownThreadIds.has(threadId)) return;
+    this.shownThreadIds.add(threadId);
+    void this.options.showInIde?.({ windowFolder, path: `openai.chatgpt/local/${threadId}` });
+  }
+
+  // Prefers the window that has the folder open, then the newest, which the user most likely sees.
+  // `windowFolder` is that window's folder, only when it is known to contain `folder`.
+  private async connectToWrapper(folder: string): Promise<{ socket: Socket; windowFolder: string | undefined }> {
+    const socketPaths = await orderSocketsForFolder(await this.listSocketPathsNewestFirst(), folder);
     for (const socketPath of socketPaths) {
       try {
-        return await connectToSocket(socketPath);
+        const socket = await connectToSocket(socketPath);
+        const workspace = await readWrapperWorkspace(socketPath);
+        return { socket, windowFolder: workspace && contains(workspace, folder) ? workspace : undefined };
       } catch {
         // Stale socket from a killed wrapper. Try the next one.
       }

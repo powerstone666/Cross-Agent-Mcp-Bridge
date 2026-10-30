@@ -12,6 +12,7 @@ import {
   type IdeServerMessage,
 } from "./codex-ide-protocol.js";
 import { isRecord } from "../../../bridge/utils/is-record.js";
+import { removeWrapperWorkspace, writeWrapperWorkspace } from "../../../bridge/utils/ide-wrapper-workspace.js";
 
 // Prefix of request ids the relay makes up. Replies to them are not forwarded,
 // because the extension never sent those requests.
@@ -112,6 +113,7 @@ export class CodexIdeWrapperService {
       this.socketServer ? this.socketServer.close(() => resolve()) : resolve(),
     );
     await rm(this.options.socketPath, { force: true });
+    await removeWrapperWorkspace(this.options.socketPath);
   }
 
   private async listenOnSocket(): Promise<void> {
@@ -139,6 +141,9 @@ export class CodexIdeWrapperService {
     // Remember the IDE's thread so relay turns join the conversation the human sees.
     const message = parseLine(line);
     if (message && isRecord(message.params) && typeof message.params.cwd === "string") {
+      if (message.params.cwd !== this.ideWorkspaceFolder) {
+        void writeWrapperWorkspace(this.options.socketPath, message.params.cwd);
+      }
       this.ideWorkspaceFolder = message.params.cwd;
     }
     if (

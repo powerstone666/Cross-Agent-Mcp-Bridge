@@ -12,6 +12,7 @@ import type {
   AgentTurnRequest,
 } from "../../../bridge/types/agent-adapter.js";
 import { createAsyncQueue } from "../../../bridge/utils/create-async-queue.js";
+import { orderSocketsForFolder } from "../../../bridge/utils/ide-wrapper-workspace.js";
 import {
   parseIdeServerMessage,
   type IdeClientMessage,
@@ -30,7 +31,7 @@ export class ClaudeIdeAdapter implements AgentAdapter {
 
   // A connection serves one turn only.
   async *run(request: AgentTurnRequest): AsyncGenerator<AgentEvent> {
-    const socket = await this.connectToNewestWrapper();
+    const socket = await this.connectToWrapper(request.workingDirectory);
     // Replies with a different id belong to another client and are ignored.
     const requestId = randomUUID();
     const events = createAsyncQueue<AgentEvent>();
@@ -91,9 +92,9 @@ export class ClaudeIdeAdapter implements AgentAdapter {
 
   close(): void {}
 
-  // The newest wrapper most likely belongs to the VS Code window the user is looking at.
-  private async connectToNewestWrapper(): Promise<Socket> {
-    for (const socketPath of await this.listSocketPathsNewestFirst()) {
+  // Prefers the window that has the folder open, then the newest, which the user most likely sees.
+  private async connectToWrapper(folder: string): Promise<Socket> {
+    for (const socketPath of await orderSocketsForFolder(await this.listSocketPathsNewestFirst(), folder)) {
       try {
         return await connectToSocket(socketPath);
       } catch {

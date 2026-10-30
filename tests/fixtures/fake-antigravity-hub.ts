@@ -4,9 +4,9 @@ import type { AddressInfo } from "node:net";
 
 export interface FakeHubOptions {
   token?: string;
-  // Polls that show RUNNING (with a waiting step when `waitsForApproval`) before IDLE.
+  // Polls that show RUNNING (with a waiting step asking `asks` until answered) before IDLE.
   runningPolls?: number;
-  waitsForApproval?: boolean;
+  asks?: Record<string, any>;
   neverFinishes?: boolean;
   modelConfigsFail?: boolean;
   grpcErrorOnMethod?: string;
@@ -36,6 +36,7 @@ export async function startFakeHub(options: FakeHubOptions = {}): Promise<FakeHu
   const steps: Record<string, any>[] = [];
   let pollsSinceSend = 0;
   let hasSent = false;
+  let isAnswered = false;
 
   const summary = () => {
     const isRunning = hasSent && (options.neverFinishes || pollsSinceSend <= (options.runningPolls ?? 1));
@@ -45,7 +46,7 @@ export async function startFakeHub(options: FakeHubOptions = {}): Promise<FakeHu
       notFullyIdle: false,
       hasRunningSubagents: false,
       backgroundTaskCount: 0,
-      waitingSteps: isRunning && options.waitsForApproval ? [{ stepIndex: steps.length - 1 }] : [],
+      waitingSteps: isRunning && options.asks && !isAnswered ? [waitingStep(options.asks, steps.length - 1)] : [],
     };
   };
 
@@ -76,6 +77,9 @@ export async function startFakeHub(options: FakeHubOptions = {}): Promise<FakeHu
         return finish(response, "grpc-status: 0\r\n", { trajectorySummaries: { [findCascadeId()]: summary() } });
       case "GetCascadeTrajectorySteps":
         return finish(response, "grpc-status: 0\r\n", { steps });
+      case "HandleCascadeUserInteraction":
+        isAnswered = true;
+        return finish(response, "grpc-status: 0\r\n", {});
       default:
         return finish(response, "grpc-status: 0\r\n");
     }
@@ -100,6 +104,17 @@ export async function startFakeHub(options: FakeHubOptions = {}): Promise<FakeHu
     calls,
     callsOf: (method) => calls.filter((call) => call.method === method).map((call) => call.body),
     close: () => new Promise((resolve) => { server.closeAllConnections(); server.close(() => resolve()); }),
+  };
+}
+
+function waitingStep(requestedInteraction: Record<string, any>, stepIndex: number) {
+  return {
+    stepIndex,
+    step: {
+      status: "CORTEX_STEP_STATUS_WAITING",
+      requestedInteraction,
+      metadata: { sourceTrajectoryStepInfo: { trajectoryId: "trajectory-1" } },
+    },
   };
 }
 

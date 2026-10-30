@@ -31,6 +31,7 @@ export interface GeminiCliAdapterOptions {
 interface AcpSession {
   client: GeminiAcpClient;
   sessionId: string;
+  workingDirectory: string;
 }
 
 interface PermissionOption {
@@ -115,8 +116,10 @@ export class GeminiCliAdapter implements AgentAdapter {
   }
 
   // Started on the first turn and kept, so Gemini keeps the conversation context.
+  // A turn for another repository starts a new session there.
   private async ensureSession(workingDirectory: string): Promise<AcpSession> {
-    if (this.session) return this.session;
+    if (this.session?.workingDirectory === workingDirectory) return this.session;
+    this.close();
 
     const client = new GeminiAcpClient({ ...this.options, workingDirectory });
     client.setAgentRequestHandler((agentRequest) =>
@@ -142,7 +145,7 @@ export class GeminiCliAdapter implements AgentAdapter {
         cwd: workingDirectory,
         mcpServers: [],
       });
-      this.session = { client, sessionId: readSessionId(sessionResult) };
+      this.session = { client, sessionId: readSessionId(sessionResult), workingDirectory };
       return this.session;
     } catch (error) {
       client.close();

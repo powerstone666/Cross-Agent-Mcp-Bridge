@@ -50,6 +50,7 @@ interface ActiveTurn {
 interface Session {
   child: ClaudeChild;
   stderrTail: string[];
+  workingDirectory: string;
 }
 
 // The human answers every approval through `requestApproval`. With no turn running,
@@ -115,15 +116,17 @@ export class ClaudeCliAdapter implements AgentAdapter {
   }
 
   // Started on the first turn and kept, so Claude keeps the conversation context.
+  // A turn for another repository starts a new session there.
   private ensureSession(workingDirectory: string): Session {
-    if (this.session) return this.session;
+    if (this.session?.workingDirectory === workingDirectory) return this.session;
+    this.close();
 
     const child = spawn(this.options.command, [...this.options.commandArguments], {
       cwd: workingDirectory,
       env: this.options.environment,
       stdio: ["pipe", "pipe", "pipe"],
     });
-    const session: Session = { child, stderrTail: [] };
+    const session: Session = { child, stderrTail: [], workingDirectory };
     this.session = session;
 
     child.stdin.on("error", () => undefined); // the exit handler reports the failure

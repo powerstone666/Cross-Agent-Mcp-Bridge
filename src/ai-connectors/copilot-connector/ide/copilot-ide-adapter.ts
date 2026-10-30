@@ -171,7 +171,7 @@ export class AgentHostIdeAdapter implements AgentAdapter {
       clientId: `${CLIENT_NAME}-${randomUUID()}`,
     });
     try {
-      const selectedSession = await pickSession({ client, pinnedSessionId, provider });
+      const selectedSession = await pickSession({ client, pinnedSessionId, provider, workingDirectory });
       const sessionResource = selectedSession ?? (pinnedSessionId === null
         ? await createProviderSession({ client, provider, workingDirectory })
         : null);

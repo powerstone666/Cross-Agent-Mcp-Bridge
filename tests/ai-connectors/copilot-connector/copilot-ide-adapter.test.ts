@@ -160,6 +160,21 @@ test("picks the most recently updated session, or the pinned one", async () => {
   assert.ok(pinned.server.received.some((message) => JSON.stringify(message.params).includes("copilot:/old")));
 });
 
+test("reuses only a session in the turn's folder, and otherwise starts one there", async () => {
+  const sessions = [
+    { resource: "copilot:/here", modifiedAt: "2026-01-01T00:00:00Z", provider: "copilot", workingDirectories: ["file:///tmp"] },
+    { resource: "copilot:/elsewhere", modifiedAt: "2026-02-01T00:00:00Z", provider: "copilot", workingDirectories: ["file:///other/repo"] },
+  ];
+  const sameFolder = await setUp({ sessions });
+  await runTurn(sameFolder.adapter);
+  assert.ok(sameFolder.server.received.some((message) => JSON.stringify(message.params).includes("copilot:/here")));
+  assert.ok(!methodsOf(sameFolder.server).includes("createSession"));
+
+  const otherFolder = await setUp({ sessions: [sessions[1]!] });
+  await runTurn(otherFolder.adapter);
+  assert.ok(methodsOf(otherFolder.server).includes("createSession"));
+});
+
 test("asks the human to choose when two windows are live", async () => {
   const first = await startFakeAhpServer();
   const second = await startFakeAhpServer();

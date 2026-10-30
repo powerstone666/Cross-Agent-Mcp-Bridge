@@ -45,7 +45,7 @@ A future `ahp-layer/` (VS Code agent UI talking to the relay over the Agent Host
 |---|---|
 | `src/main.ts` | The one entry point. `main.ts` runs the terminal chat, `main.ts mcp` runs the MCP server. |
 | `src/agent-modules.ts` | The only place agents are listed. Adding an agent = one line here. |
-| `src/bridge/bridge-service.ts` | The heart. Queues `@agent` messages, picks the adapter, runs one turn at a time, logs every event, and handles approvals. |
+| `src/bridge/bridge-service.ts` | The heart. Queues `@agent` messages, picks the adapter, runs one turn per agent at a time (different agents in parallel), logs every event, and handles approvals. |
 | `src/bridge/agent-room-manager.ts` | Room files, task status/assignment, onboarding, membership, and persisted activity events. |
 | `src/bridge/coordination-service.ts` | Cooperative task file claims and Git worktree operations. |
 | `src/bridge/approval-queue.ts` | Holds explicitly requested MCP approval reviews until the user decides in the dashboard. |
@@ -74,7 +74,7 @@ A future `ahp-layer/` (VS Code agent UI talking to the relay over the Agent Host
 | Codex | `@codex` | Yes: own Codex process; the relay answers action approvals | Yes: wrapper set through `chatgpt.cliExecutable`; provider approval behavior applies | Real Codex (live) and a fake server |
 | Claude Code | `@claude` | Yes: `claude -p` over stream-json; the relay answers action approvals | Yes: wrapper set through `claudeCode.claudeProcessWrapper`; provider approval behavior applies | Fake `claude` only |
 | GitHub Copilot | `@copilot` | No (no safe non-interactive approval flow) | Yes: VS Code agent host protocol, approvals stay in VS Code | Fake agent host only |
-| Gemini | `@gemini` | Yes: Gemini CLI over ACP; the relay answers action approvals | Yes: the open Antigravity window's local hub (private API, found from the process list); provider approval behavior applies | Antigravity route: real Antigravity (live) and a fake hub. CLI route: fake ACP agent only (Gemini CLI is not installed here) |
+| Gemini | `@gemini` | Yes: Gemini CLI over ACP; the relay answers action approvals | Yes: the open Antigravity window's local hub (private API, found from the process list); the relay answers permission and command prompts, other prompts stay in the IDE | Antigravity route: real Antigravity (live) and a fake hub. CLI route: fake ACP agent only (Gemini CLI is not installed here) |
 
 The `agy` program is not supported because its print-mode approval behavior is unknown. Codex approval and sandbox settings, and Gemini approval mode, follow each agent's defaults or the corresponding relay environment variables.
 
@@ -109,6 +109,7 @@ In the terminal path the human types `@codex ...` in `terminal-layer/chat-comman
 - The VS Code settings script is dry-run by default, saves a backup, adds one key and never overwrites a different value.
 - Starting the MCP relay does not create a room. Agents call `get_room_setup` to inspect existing rooms and the target path, then explicitly call `create_room` when the project needs one. Passing `participantId` joins the creator in the current MCP session; otherwise call `join_room` separately. The room contains `ROOM.md` with its coordinator, task and message files, knowledge and decisions, membership records, and an append-only `events.jsonl`. `RELAY_AGENT_ROOM` chooses the suggested room name and defaults to `backend`.
 - `invite_to_room` can create an assigned task before waking an agent. The invitation and wake-up turn carry the task ID and tell the agent to use the room task, knowledge, and decision tools while working.
+- `invite_to_room` runs the turn in the room's target repository and returns once the turn reaches the agent; the turn continues in the background and its final reply or error is posted as the agent's room message. `waitForReply: true` keeps the old blocking behavior. CLI sessions restart when a turn targets a different repository.
 - Joining can be followed by `get_room_onboarding`, which returns room instructions, knowledge, decisions, and tasks assigned to that participant. Membership is bound to MCP sessions; sessions missing after process restart appear as interrupted, while task files retain their last status.
 - Task-level file claims coordinate collaborators but are advisory: agents must claim before editing and release afterward. Git worktrees can isolate task branches when needed. Room and claim writes are serialized and atomically replaced where a whole file is updated.
 - Room changes are persisted as concise events. MCP clients can subscribe to the `cross-agent-mcp-bridge://rooms/events` resource, and the dashboard refreshes over server-sent events. Messages and knowledge stay in room files; notifications do not copy full documents.

@@ -42,7 +42,7 @@ export function parseHubProcessLines(output: string): HubEndpoint[] {
   return hubs;
 }
 
-function coversFolder({ hubFolder, targetFolder }: { hubFolder: string; targetFolder: string }) {
+export function coversFolder({ hubFolder, targetFolder }: { hubFolder: string; targetFolder: string }) {
   const base = hubFolder.replace(/\/+$/, "");
   return targetFolder === base || targetFolder.startsWith(`${base}/`);
 }

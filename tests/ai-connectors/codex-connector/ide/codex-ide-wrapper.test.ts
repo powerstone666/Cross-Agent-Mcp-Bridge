@@ -1,6 +1,7 @@
 // Proves the wrapper passes normal traffic through, shows relay turns in the IDE, and does no
 // harm when the relay fails (the IDE must keep working). Uses a fake server.
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { connect } from "node:net";
 import { tmpdir } from "node:os";
@@ -110,6 +111,20 @@ test("starts a thread itself when the IDE has none", async () => {
     const replyText = events.filter((event) => event.kind === "reply_delta").map((event) => event.text).join("");
     assert.equal(replyText, "echo: hello");
     assert.ok(extensionLines.some((line) => line.includes("item/agentMessage/delta")), "IDE sees the turn");
+  });
+});
+
+test("opens a relay thread in its own window once, and notes the window's folder for the relay", async () => {
+  await withWrapper(async ({ directory, extensionInput, extensionLines }) => {
+    sendFromExtension(extensionInput, { id: 1, method: "initialize", params: { clientInfo: { name: "ext", version: "1" }, cwd: "/tmp" } });
+    await waitFor(() => existsSync(join(directory, "1.workspace.json")));
+
+    const shown: unknown[] = [];
+    const adapter = new CodexIdeAdapter({ socketDirectoryPath: directory, newThreadParams: NEW_THREAD_PARAMS, showInIde: async (input) => { shown.push(input); } });
+    await collect(adapter.run(adapterRequest("hello")));
+    await collect(adapter.run(adapterRequest("again")));
+    assert.equal(shown.length, 1);
+    assert.deepEqual(shown[0], { windowFolder: "/tmp", path: `openai.chatgpt/local/${JSON.parse(extensionLines.find((line) => line.includes('"thread/started"')) ?? "{}").params?.thread?.id ?? "thread-1"}` });
   });
 });
 

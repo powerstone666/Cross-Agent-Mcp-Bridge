@@ -25,7 +25,7 @@ export interface FakeAhpOptions {
   lifecycle?: string;
   chatInteractivity?: string;
   chatHasActiveTurn?: boolean;
-  sessions?: Array<{ resource: string; modifiedAt: string }>;
+  sessions?: Array<{ resource: string; modifiedAt: string; provider?: string; workingDirectories?: string[] }>;
   provider?: string;
   token?: string;
 }

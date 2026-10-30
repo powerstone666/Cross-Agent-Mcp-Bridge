@@ -35,7 +35,7 @@ Pass the exact repository-scoped `roomId` returned by the setup or create tool t
 | `assign_task` | Assign an existing task to a participant. |
 | `update_task` | Add a progress note to a task. |
 | `set_task_status` | Set a task to `open`, `in_progress`, `review`, or `done`. |
-| `invite_to_room` | Post an invitation and wake another agent; optional `task` creates an assigned task first and returns its `taskId`. Room messages alone never wake an agent. |
+| `invite_to_room` | Post an invitation and wake another agent in the room's repository; optional `task` creates an assigned task first and returns its `taskId`. Returns `status: "started"` as soon as the agent has the message, so you can do other work; the agent's final reply arrives as its room message (`Finished: ...` or `Turn failed: ...`). Pass `waitForReply: true` to wait instead. Room messages alone never wake an agent. |
 | `list_invitable_agents` | Check which connected agents are in the room, interrupted, disconnected, or available to invite. |
 | `send_room_message` | Share a concise update or handoff with room members. |
 | `publish_knowledge` / `search_knowledge` | Save reusable project context and search it later. |

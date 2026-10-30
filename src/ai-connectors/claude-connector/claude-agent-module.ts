@@ -13,6 +13,7 @@ import {
 import { AgentHostIdeAdapter } from "../copilot-connector/ide/copilot-ide-adapter.js";
 import { loadCopilotConfig } from "../copilot-connector/copilot-config.js";
 import { ClaudeIdeAdapter } from "./ide/claude-ide-adapter.js";
+import { IdeFirstAdapter } from "../../bridge/ide-first-adapter.js";
 
 export const claudeAgentModule: AgentModule = {
   agentName: CLAUDE_AGENT_NAME,
@@ -20,6 +21,25 @@ export const claudeAgentModule: AgentModule = {
 
   createAdapter({ environment, humanApprovalChannel }) {
     const config = loadClaudeConfig({ environment });
+
+    const createCli = (binaryPath: string) => new ClaudeCliAdapter({
+      command: binaryPath,
+      commandArguments: CLAUDE_CLI_ARGUMENTS,
+      environment: environment,
+    });
+    const chosenMode = environment.RELAY_CLAUDE_MODE;
+    if (humanApprovalChannel === "automatic") {
+      // An explicit RELAY_CLAUDE_MODE wins. Otherwise use the Claude Code panel whenever a window
+      // has it open, so the human sees the turn, and the CLI when none does.
+      if (chosenMode === "ide") return new ClaudeIdeAdapter({ socketDirectoryPath: config.ideSocketDirectoryPath });
+      if (config.binaryPath && chosenMode !== "cli") {
+        return new IdeFirstAdapter({
+          ide: new ClaudeIdeAdapter({ socketDirectoryPath: config.ideSocketDirectoryPath }),
+          cli: createCli(config.binaryPath),
+          isIdeOpen: (status) => status.ideWrapperRunning === true,
+        });
+      }
+    }
 
     // Automatic mode uses CLI when present; the Agent Host is the messaging fallback.
     if (humanApprovalChannel === "agent-ui" || (humanApprovalChannel === "automatic" && !config.binaryPath)) {
@@ -40,11 +60,7 @@ export const claudeAgentModule: AgentModule = {
         "Claude binary not found. Install the Claude Code VS Code extension or set RELAY_CLAUDE_BINARY.",
       );
     }
-    return new ClaudeCliAdapter({
-      command: config.binaryPath,
-      commandArguments: CLAUDE_CLI_ARGUMENTS,
-      environment: environment,
-    });
+    return createCli(config.binaryPath);
   },
 
   describeVscodeSetting({ relayRootPath }) {

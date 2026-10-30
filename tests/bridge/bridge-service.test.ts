@@ -106,6 +106,46 @@ test("queues a second message while one turn is running", async () => {
   });
 });
 
+test("different agents run in parallel, each in the requested folder, and report when they start", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "cross-agent-mcp-bridge-parallel-"));
+  let releaseSlow!: () => void;
+  const slowGate = new Promise<void>((resolve) => { releaseSlow = resolve; });
+  const workingDirectories: string[] = [];
+  const adapterThat = (wait: () => Promise<void>): AgentAdapter => ({
+    async *run({ messageText, workingDirectory }) {
+      workingDirectories.push(workingDirectory);
+      await wait();
+      yield { kind: "reply_delta", text: messageText };
+      yield { kind: "reply_complete", text: "" };
+    },
+    async readStatus() { return {}; },
+    close() {},
+  });
+  const bridgeService = new BridgeService({
+    adapters: new Map([["slow", adapterThat(() => slowGate)], ["fast", adapterThat(async () => {})]]),
+    eventLog: new EventLogService({ logDirectoryPath: join(directory, "log") }),
+    approvalPrompter: { requestApproval: async () => "decline" },
+    conversationId: CONVERSATION_ID,
+    workingDirectory: directory,
+  });
+  try {
+    const started: string[] = [];
+    const slow = collect(bridgeService.handleUserInput({ inputText: "@slow one", signal, onStarted: () => started.push("slow") }));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(bridgeService.getLiveActivity().agents, { slow: "working" });
+    // The fast agent finishes while the slow one is still busy.
+    const fast = await collect(bridgeService.handleUserInput({ inputText: "@fast two", signal, workingDirectory: "/rooms/repo", onStarted: () => started.push("fast") }));
+    assert.deepEqual(fast.map((event) => event.text), ["two", ""]);
+    assert.deepEqual(started, ["slow", "fast"]);
+    releaseSlow();
+    assert.deepEqual((await slow).map((event) => event.text), ["one", ""]);
+    assert.deepEqual(workingDirectories, [directory, "/rooms/repo"]);
+    assert.deepEqual(bridgeService.getLiveActivity(), { agentName: null, phase: "idle", agents: {} });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("explicit review sends approval requests to the human", async () => {
   await withBridgeService({ decision: "accept" }, async ({ bridgeService, eventLog }) => {
     const activity: string[] = [];

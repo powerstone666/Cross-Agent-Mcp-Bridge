@@ -28,17 +28,19 @@ async function runTurn({
   decision = "decline",
   signal = new AbortController().signal,
   onApproval,
+  workingDirectory = "/tmp",
 }: {
   adapter: CodexCliAdapter;
   messageText: string;
   decision?: ApprovalDecision;
   signal?: AbortSignal;
   onApproval?: (request: ApprovalRequest) => void;
+  workingDirectory?: string;
 }): Promise<AgentEvent[]> {
   const events: AgentEvent[] = [];
   const turn = adapter.run({
     messageText,
-    workingDirectory: "/tmp",
+    workingDirectory,
     signal,
     requestApproval: async (request) => {
       onApproval?.(request);
@@ -71,6 +73,19 @@ test("passes the chosen approval policy and sandbox to Codex", async () => {
       approvalPolicy: "untrusted",
       sandbox: "workspace-write",
     });
+  } finally {
+    adapter.close();
+  }
+});
+
+test("a turn for another repository starts a new thread there", async () => {
+  const adapter = createAdapter();
+  try {
+    const cwdOf = async (workingDirectory: string) =>
+      JSON.parse((await runTurn({ adapter, messageText: "show-config", workingDirectory }))[0]?.text ?? "{}").cwd;
+    assert.equal(await cwdOf("/tmp"), "/tmp");
+    assert.equal(await cwdOf("/tmp"), "/tmp");
+    assert.equal(await cwdOf("/var"), "/var");
   } finally {
     adapter.close();
   }

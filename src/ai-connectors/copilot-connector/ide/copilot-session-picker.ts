@@ -12,28 +12,43 @@ const SESSION_START_TIMEOUT_MS = 30_000;
 interface SessionCandidate {
   resource: string;
   modifiedMs: number;
+  // The host lists these; when it does not, they are read from the session state.
+  provider: string | undefined;
+  workingDirectories: string[] | undefined;
 }
 
 // Returns null when this host has no matching session. Throws when a pin matches several.
+// Without a pin, only a session in `workingDirectory` is reused, so the chat opens in that project.
 export async function pickSession({
   client,
   pinnedSessionId,
   provider,
+  workingDirectory,
 }: {
   client: CopilotAhpClient;
   pinnedSessionId: string | null;
   provider: string;
+  workingDirectory: string;
 }): Promise<string | null> {
   const candidates = await listSessions({ client });
   const candidateMatches = candidates
     .filter(({ resource }) => pinnedSessionId === null || matchesId({ resource, id: pinnedSessionId }))
     .sort((first, second) => second.modifiedMs - first.modifiedMs);
+  if (pinnedSessionId === null) {
+    const folder = pathToFileURL(workingDirectory).href;
+    for (const candidate of candidateMatches) {
+      const facts = await readSessionFacts({ client, candidate });
+      // A session the host cannot restore is skipped; a new one is created instead.
+      if (!facts || facts.provider !== provider) continue;
+      if (!facts.workingDirectories || facts.workingDirectories.includes(folder)) return candidate.resource;
+    }
+    return null;
+  }
   const providerMatches: string[] = [];
   for (const candidate of candidateMatches) {
     const state = await readState({ client, channel: candidate.resource });
     if (state.provider === provider) providerMatches.push(candidate.resource);
   }
-  if (pinnedSessionId === null) return providerMatches[0] ?? null;
   const matches = providerMatches;
   if (matches.length > 1) {
     throw new Error("The configured session id matches more than one session for this provider");
@@ -137,6 +152,26 @@ export async function assertChatIdle({
   }
 }
 
+async function readSessionFacts({
+  client,
+  candidate,
+}: {
+  client: CopilotAhpClient;
+  candidate: SessionCandidate;
+}): Promise<{ provider: unknown; workingDirectories: string[] | undefined } | undefined> {
+  if (candidate.provider !== undefined && candidate.workingDirectories !== undefined) return candidate;
+  try {
+    const state = await readState({ client, channel: candidate.resource });
+    return { provider: candidate.provider ?? state.provider, workingDirectories: candidate.workingDirectories ?? readStrings(state.workingDirectories) };
+  } catch {
+    return undefined;
+  }
+}
+
+function readStrings(value: unknown): string[] | undefined {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : undefined;
+}
+
 async function readState({
   client,
   channel,
@@ -164,7 +199,12 @@ async function listSessions({ client }: { client: CopilotAhpClient }): Promise<S
     for (const item of Array.isArray(result.items) ? result.items : []) {
       if (!isRecord(item) || typeof item.resource !== "string") continue;
       const modifiedMs = typeof item.modifiedAt === "string" ? Date.parse(item.modifiedAt) : 0;
-      candidates.push({ resource: item.resource, modifiedMs: Number.isNaN(modifiedMs) ? 0 : modifiedMs });
+      candidates.push({
+        resource: item.resource,
+        modifiedMs: Number.isNaN(modifiedMs) ? 0 : modifiedMs,
+        provider: typeof item.provider === "string" ? item.provider : undefined,
+        workingDirectories: readStrings(item.workingDirectories),
+      });
     }
     if (typeof result.nextCursor !== "string") break;
     cursor = result.nextCursor;

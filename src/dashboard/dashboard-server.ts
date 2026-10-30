@@ -141,8 +141,8 @@ export class DashboardServer {
       agents: agents.map((agent) => ({
         ...agent,
         connection: this.memberConnection(agent.agentName, members) ?? agent.connection,
-        activity: liveActivity.agentName === agent.agentName
-          ? liveActivity.phase === "waiting_approval" ? "Waiting approval" : "Working"
+        activity: liveActivity.agents[agent.agentName]
+          ? liveActivity.agents[agent.agentName] === "waiting_approval" ? "Waiting approval" : "Working"
           : this.memberConnection(agent.agentName, members) === "Interrupted" ? "Interrupted"
           : taskAssignments.some((task) => task.assignedTo === agent.agentName && task.status === "review") ? "Reviewing"
           : taskAssignments.some((task) => task.assignedTo === agent.agentName && task.status === "in_progress") ? "In progress" : "Idle",

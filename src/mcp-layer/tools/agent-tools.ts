@@ -55,17 +55,19 @@ export function registerAgentTools(server: McpServer, { agentRegistry, bridgeSer
   });
 }
 
-export async function runAgentTurn({ agent, message, signal, bridgeService, requireHumanApproval = false }: {
+export async function runAgentTurn({ agent, message, signal, bridgeService, requireHumanApproval = false, onStarted, workingDirectory }: {
   agent: string;
   message: string;
   signal: AbortSignal;
   bridgeService: BridgeService;
   requireHumanApproval?: boolean | undefined;
+  onStarted?: () => void;
+  workingDirectory?: string;
 }): Promise<CallToolResult> {
     let replyText = "";
     let failureText: string | undefined;
     // Gather streamed deltas into the single reply returned by this MCP call.
-    for await (const event of bridgeService.handleUserInput({ inputText: `@${agent} ${message}`, signal, requireHumanApproval })) {
+    for await (const event of bridgeService.handleUserInput({ inputText: `@${agent} ${message}`, signal, requireHumanApproval, ...(onStarted && { onStarted }), ...(workingDirectory && { workingDirectory }) })) {
       if (event.kind === "reply_delta") replyText += event.text;
       else if (event.kind === "error") failureText = event.text;
       else if (event.kind === "cancelled") failureText = "Turn cancelled";

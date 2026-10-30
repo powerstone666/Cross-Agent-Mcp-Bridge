@@ -1,11 +1,13 @@
 // Sends a relay message into Antigravity's own agent (a "cascade") and reads the reply back.
-// Never answer the IDE's approval prompts and never resend a message: the human decides in the IDE.
+// Approval prompts go through `requestApproval` like every other agent; kinds the relay cannot
+// read are left to the human in the IDE. Never resend a message.
 import { randomUUID } from "node:crypto";
 import type {
   AgentAdapter,
   AgentEvent,
   AgentStatus,
   AgentTurnRequest,
+  ApprovalRequest,
 } from "../../../bridge/types/agent-adapter.js";
 import {
   CASCADE_SOURCE,
@@ -15,7 +17,9 @@ import {
   WAITING_FOR_APPROVAL_LINE,
   readIdeTimeoutMs,
 } from "./antigravity-config.js";
+import type { ShowInIde } from "../../../bridge/utils/show-in-ide.js";
 import {
+  coversFolder,
   discoverHub,
   isHubHealthy,
   listProcesses,
@@ -28,6 +32,7 @@ const PLANNER_RESPONSE_STEP = "CORTEX_STEP_TYPE_PLANNER_RESPONSE";
 const ERROR_STEP_STATUS = "CORTEX_STEP_STATUS_ERROR";
 const ERROR_STEP_TYPE = "CORTEX_STEP_TYPE_ERROR_MESSAGE";
 const BUSY_RUN_STATUSES = ["CASCADE_RUN_STATUS_RUNNING", "CASCADE_RUN_STATUS_BUSY"];
+const FILE_CHANGE_ACTION = /write|edit|replace|create|delete|move|rename/i;
 const DELIVERY_UNCERTAIN_MESSAGE =
   "Antigravity did not confirm the message, so it may or may not have arrived. It was not resent.";
 
@@ -36,6 +41,8 @@ export interface GeminiIdeAdapterOptions {
   listProcesses?: ListProcesses;
   pollIntervalMs?: number;
   timeoutMs?: number;
+  // Opens a new relay conversation in the Antigravity panel; does nothing when left out.
+  showInIde?: ShowInIde;
 }
 
 interface TurnContext {
@@ -84,6 +91,7 @@ export class GeminiIdeAdapter implements AgentAdapter {
     });
     const client = new HubClient(hub);
     const model = await this.readModel(client);
+    const isNewCascade = !this.cascadeByFolder.has(request.workingDirectory);
     const cascadeId = await this.findOrStartCascade({ client, folder: request.workingDirectory });
     const stepCountBefore = (await readSummary({ client, cascadeId }))?.stepCount ?? 0;
     try {
@@ -104,6 +112,13 @@ export class GeminiIdeAdapter implements AgentAdapter {
       if (!(error instanceof HubTransportError)) throw error;
       yield { kind: "error", text: DELIVERY_UNCERTAIN_MESSAGE };
       return;
+    }
+    // The panel lists a conversation it did not start only after a reload, so open it by link.
+    if (isNewCascade) {
+      void this.options.showInIde?.({
+        windowFolder: hub.folders.find((hubFolder) => coversFolder({ hubFolder, targetFolder: request.workingDirectory })),
+        path: `google.google-antigravity/open-conversation?cascadeId=${cascadeId}`,
+      });
     }
     yield* this.waitForReply({ client, cascadeId, stepCountBefore, request });
   }
@@ -146,19 +161,36 @@ export class GeminiIdeAdapter implements AgentAdapter {
     const deadline = Date.now() + timeoutMs;
     let hasStarted = false;
     let hasAnnouncedWaiting = false;
+    const handledSteps = new Set<string>();
 
     while (true) {
       if (request.signal.aborted) return yield await cancelCascade(context);
-      if (Date.now() >= deadline) return yield { kind: "error", text: TIMEOUT_MESSAGE };
+      if (Date.now() >= deadline) {
+        // A cascade left waiting on approval swallows every later message, so stop it first.
+        await cancelCascade(context);
+        return yield { kind: "error", text: TIMEOUT_MESSAGE };
+      }
       await sleep({ ms: pollIntervalMs, signal: request.signal });
       if (request.signal.aborted) continue;
 
       const summary = await readSummary({ client, cascadeId });
       if (!summary) continue;
       hasStarted ||= (summary.stepCount ?? 0) > stepCountBefore || isBusy(summary);
-      if (hasWaitingSteps(summary) && !hasAnnouncedWaiting) {
-        hasAnnouncedWaiting = true;
-        yield { kind: "reply_delta", text: WAITING_FOR_APPROVAL_LINE };
+      for (const waiting of summary.waitingSteps ?? []) {
+        const prompt = readPrompt(waiting);
+        if (handledSteps.has(prompt.key)) continue;
+        handledSteps.add(prompt.key);
+        if (!prompt.answerable) {
+          if (!hasAnnouncedWaiting) yield { kind: "reply_delta", text: WAITING_FOR_APPROVAL_LINE };
+          hasAnnouncedWaiting = true;
+          continue;
+        }
+        const decision = await request.requestApproval(prompt.approval);
+        if (decision === "cancel") return yield await cancelCascade(context);
+        await client.callHub("HandleCascadeUserInteraction", {
+          cascadeId,
+          interaction: prompt.answer(decision === "accept"),
+        });
       }
       if (hasStarted && isFullyIdle(summary)) break;
     }
@@ -206,6 +238,56 @@ async function readSummary({
 }): Promise<HubJson | undefined> {
   const { trajectorySummaries } = await client.callHub("GetAllCascadeTrajectories", {});
   return trajectorySummaries?.[cascadeId];
+}
+
+type Prompt =
+  | { key: string; answerable: false }
+  | { key: string; answerable: true; approval: ApprovalRequest; answer(allow: boolean): HubJson };
+
+// A waiting step names what it asks in `requestedInteraction`; the answer echoes the step's place.
+function readPrompt(waiting: HubJson): Prompt {
+  const trajectoryId = waiting.step?.metadata?.sourceTrajectoryStepInfo?.trajectoryId;
+  const stepIndex = waiting.stepIndex;
+  const key = `${trajectoryId}:${stepIndex}`;
+  const asked = waiting.step?.requestedInteraction ?? {};
+  const answerTo = (fields: HubJson) => ({ trajectoryId, stepIndex, ...fields });
+
+  if (asked.permission) {
+    const { action = "an action", target = "" } = asked.permission.resource ?? {};
+    return {
+      key,
+      answerable: true,
+      approval: {
+        kind: FILE_CHANGE_ACTION.test(action) ? "file-change" : "command",
+        summary: `Gemini wants to: ${action}${target ? ` ${target}` : ""}`,
+        detailLines: [asked.permission.actionDescription, asked.permission.reason].filter(Boolean),
+      },
+      answer: (allow) => answerTo({ permission: { allow, scope: "PERMISSION_SCOPE_ONCE" } }),
+    };
+  }
+  if (asked.filePermission) {
+    const path = asked.filePermission.absolutePathUri ?? "";
+    return {
+      key,
+      answerable: true,
+      approval: { kind: "command", summary: `Gemini wants to access ${path}`, detailLines: [`path: ${path}`] },
+      answer: (allow) =>
+        answerTo({ filePermission: { allow, scope: "PERMISSION_SCOPE_ONCE", absolutePathUri: path } }),
+    };
+  }
+  if (asked.runCommand) {
+    const commandLine = asked.runCommand.proposedCommandLine ?? "";
+    return {
+      key,
+      answerable: true,
+      approval: { kind: "command", summary: "Gemini wants to run a command", detailLines: [commandLine] },
+      answer: (confirm) =>
+        answerTo({
+          runCommand: { confirm, proposedCommandLine: commandLine, submittedCommandLine: commandLine },
+        }),
+    };
+  }
+  return { key, answerable: false };
 }
 
 const isBusy = (summary: HubJson) => BUSY_RUN_STATUSES.includes(summary.status);

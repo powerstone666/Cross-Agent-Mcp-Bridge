@@ -344,11 +344,11 @@ export class AgentRoomManager {
     return hits;
   }
 
-  async sendRoomMessage(roomId: string, message: string): Promise<void> {
+  async sendRoomMessage(roomId: string, message: string, participantId = this.participantId): Promise<void> {
     const paths = await this.pathsFor(roomId);
-    const record = { roomId: this.normalizeRoomReference(roomId), sessionId: this.options.sessionId, participantId: this.participantId, timestamp: new Date().toISOString(), message: message.trim() };
+    const record = { roomId: this.normalizeRoomReference(roomId), sessionId: this.options.sessionId, participantId, timestamp: new Date().toISOString(), message: message.trim() };
     await this.enqueue(() => appendFile(paths.messagesPath, `${JSON.stringify(record)}\n`, { mode: 0o600 }));
-    await this.publishActivity({ roomId: this.normalizeRoomReference(roomId), type: "room.message.received", actor: this.participantId, summary: `${this.participantId} sent a room message.` });
+    await this.publishActivity({ roomId: this.normalizeRoomReference(roomId), type: "room.message.received", actor: participantId, summary: `${participantId} sent a room message.` });
   }
 
   // The dashboard and MCP resource share this event stream for concise change notices.

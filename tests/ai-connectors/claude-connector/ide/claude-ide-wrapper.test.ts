@@ -1,5 +1,5 @@
 // Proves the wrapper passes traffic through unchanged, injects relay turns only when idle,
-// refuses while busy, and never breaks the IDE when its socket fails (fake claude).
+// queues them while busy, and never breaks the IDE when its socket fails (fake claude).
 import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { connect } from "node:net";
@@ -116,35 +116,65 @@ test("injects before the IDE has sent anything", async () => {
   });
 });
 
-test("refuses injection while an IDE turn is running", async () => {
+const WAITING = "[waiting for the Claude IDE session to finish its current turn]\n";
+
+test("queues a relay turn while an IDE turn runs, and starts it when that turn ends", async () => {
   await withWrapper(async ({ directory, wrapper, extensionInput, extensionLines }) => {
     sendFromExtension(extensionInput, userLine("hang"));
     await waitFor(() => wrapper.readState().isTurnActive);
 
     const adapter = new ClaudeIdeAdapter({ socketDirectoryPath: directory });
-    const events = await collect(adapter.run(relayRequest("hello")));
-    assert.deepEqual(events.map((event) => event.kind), ["error"]);
-    assert.match(events[0]?.text ?? "", /in progress/);
+    const relayEvents: AgentEvent[] = [];
+    const relayTurn = (async () => { for await (const event of adapter.run(relayRequest("hello"))) relayEvents.push(event); })();
+    await waitFor(() => relayEvents.length === 1);
+    assert.deepEqual(relayEvents, [{ kind: "reply_delta", text: WAITING }]);
+    assert.equal(countResults(extensionLines), 0, "the IDE turn is untouched");
 
     sendFromExtension(extensionInput, { type: "control_request", request_id: "ext-1", request: { subtype: "interrupt" } });
-    await waitFor(() => countResults(extensionLines) === 1);
+    await relayTurn;
+    assert.equal(relayEvents.filter((event) => event.kind === "reply_delta").map((event) => event.text).join(""), `${WAITING}echo: hello`);
+    assert.equal(relayEvents.at(-1)?.kind, "reply_complete");
+    assert.equal(countResults(extensionLines), 2);
   });
 });
 
-test("refuses injection while an approval waits, and the relay never answers it", async () => {
+test("queues a relay turn while an approval waits, never answers it, and runs after the human does", async () => {
   await withWrapper(async ({ directory, wrapper, extensionInput, extensionLines }) => {
     sendFromExtension(extensionInput, userLine("needs-approval"));
     await waitFor(() => wrapper.readState().pendingApprovalCount === 1);
 
     const adapter = new ClaudeIdeAdapter({ socketDirectoryPath: directory });
-    const events = await collect(adapter.run(relayRequest("hello")));
-    assert.match(events[0]?.text ?? "", /approval is waiting/);
+    const relayTurn = collect(adapter.run(relayRequest("hello")));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     assert.equal(countResults(extensionLines), 0, "the blocked turn is untouched");
 
     // The human answers in the IDE.
     sendFromExtension(extensionInput, { type: "control_response", response: { subtype: "success", request_id: "req-1", response: { behavior: "deny", message: "no", interrupt: false } } });
-    await waitFor(() => countResults(extensionLines) === 1);
+    const events = await relayTurn;
+    assert.equal(events[0]?.text, WAITING);
+    assert.equal(events.at(-1)?.kind, "reply_complete");
+    assert.equal(countResults(extensionLines), 2);
     assert.equal(wrapper.readState().pendingApprovalCount, 0);
+  });
+});
+
+test("cancelling a queued relay turn ends it without touching the IDE turn", async () => {
+  await withWrapper(async ({ directory, wrapper, extensionInput, extensionLines }) => {
+    sendFromExtension(extensionInput, userLine("hang"));
+    await waitFor(() => wrapper.readState().isTurnActive);
+
+    const controller = new AbortController();
+    const adapter = new ClaudeIdeAdapter({ socketDirectoryPath: directory });
+    const relayTurn = collect(adapter.run({ ...relayRequest("hello"), signal: controller.signal }));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    controller.abort();
+    const events = await relayTurn;
+    assert.equal(events.at(-1)?.kind, "cancelled");
+
+    sendFromExtension(extensionInput, { type: "control_request", request_id: "ext-1", request: { subtype: "interrupt" } });
+    await waitFor(() => countResults(extensionLines) === 1);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(countResults(extensionLines), 1, "the cancelled relay turn never ran");
   });
 });
 

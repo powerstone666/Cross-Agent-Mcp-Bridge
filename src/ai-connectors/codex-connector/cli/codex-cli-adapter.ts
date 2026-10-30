@@ -32,6 +32,7 @@ export interface CodexCliAdapterOptions {
 interface ThreadSession {
   client: CodexRpcClient;
   threadId: string;
+  workingDirectory: string;
 }
 
 // Its thread is not the one shown in the IDE. Approval requests that Codex sends
@@ -116,8 +117,10 @@ export class CodexCliAdapter implements AgentAdapter {
   }
 
   // Started on the first turn and kept, so the thread lasts across turns.
+  // A turn for another repository starts a new thread there.
   private async ensureSession(workingDirectory: string): Promise<ThreadSession> {
-    if (this.session) return this.session;
+    if (this.session?.workingDirectory === workingDirectory) return this.session;
+    this.close();
 
     const client = new CodexRpcClient({
       command: this.options.command,
@@ -146,7 +149,7 @@ export class CodexCliAdapter implements AgentAdapter {
         ...(this.options.sandboxMode && { sandbox: this.options.sandboxMode }),
         serviceName: CLIENT_NAME,
       });
-      this.session = { client, threadId: readThreadId(threadResponse) };
+      this.session = { client, threadId: readThreadId(threadResponse), workingDirectory };
       return this.session;
     } catch (error) {
       // Do not leave a half-started server running.

@@ -4,6 +4,7 @@ import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { IdeFirstAdapter } from "../../../src/bridge/ide-first-adapter.js";
 import { GeminiCliAdapter } from "../../../src/ai-connectors/gemini-connector/cli/gemini-cli-adapter.js";
 import { GeminiIdeAdapter } from "../../../src/ai-connectors/gemini-connector/ide/gemini-ide-adapter.js";
 import { geminiAgentModule } from "../../../src/ai-connectors/gemini-connector/gemini-agent-module.js";
@@ -100,8 +101,12 @@ test("uses the Antigravity route when there is no terminal, or when asked", () =
 
   const asked = geminiAgentModule.createAdapter({ ...base, environment: { RELAY_GEMINI_MODE: "ide" }, humanApprovalChannel: "terminal" });
   assert.ok(asked instanceof GeminiIdeAdapter);
-  const automatic = geminiAgentModule.createAdapter({ ...base, environment: { RELAY_GEMINI_BINARY: "/fake/gemini", RELAY_GEMINI_MODE: "ide" }, humanApprovalChannel: "automatic" });
-  assert.ok(automatic instanceof GeminiCliAdapter);
+  const automatic = geminiAgentModule.createAdapter({ ...base, environment: { RELAY_GEMINI_BINARY: "/fake/gemini" }, humanApprovalChannel: "automatic" });
+  assert.ok(automatic instanceof IdeFirstAdapter);
+  const automaticCli = geminiAgentModule.createAdapter({ ...base, environment: { RELAY_GEMINI_BINARY: "/fake/gemini", RELAY_GEMINI_MODE: "cli" }, humanApprovalChannel: "automatic" });
+  assert.ok(automaticCli instanceof GeminiCliAdapter);
+  const automaticIde = geminiAgentModule.createAdapter({ ...base, environment: { RELAY_GEMINI_BINARY: "/fake/gemini", RELAY_GEMINI_MODE: "ide" }, humanApprovalChannel: "automatic" });
+  assert.ok(automaticIde instanceof GeminiIdeAdapter);
 });
 
 test("rejects an unknown mode", () => {

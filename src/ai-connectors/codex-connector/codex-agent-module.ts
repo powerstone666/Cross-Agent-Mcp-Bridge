@@ -1,7 +1,9 @@
 // Describes Codex to the relay: its name, adapter factory and the VS Code setting it needs.
 import { resolve } from "node:path";
 import type { AgentModule } from "../../bridge/types/agent-module.js";
+import { IdeFirstAdapter } from "../../bridge/ide-first-adapter.js";
 import { pickEnvironment } from "../../bridge/utils/pick-environment.js";
+import { createShowInIde } from "../../bridge/utils/show-in-ide.js";
 import { CodexCliAdapter } from "./cli/codex-cli-adapter.js";
 import {
   CODEX_AGENT_NAME,
@@ -22,30 +24,20 @@ export const codexAgentModule: AgentModule = {
     const config = loadCodexConfig({ environment });
     const ideApprovalPolicy = config.approvalPolicy ?? (humanApprovalChannel === "automatic" ? "never" : null);
 
-    const useIde = humanApprovalChannel === "automatic"
-      ? !config.binaryPath
-      : config.mode === "ide" || humanApprovalChannel === "agent-ui";
-    if (useIde) {
-      return new CodexIdeAdapter({
-        socketDirectoryPath: config.ideSocketDirectoryPath,
-        newThreadParams: {
-          cwd: targetRepositoryPath,
-          // Without an explicit target repo, open new threads in the IDE's own workspace.
-          preferIdeWorkspace: environment.RELAY_TARGET_REPO === undefined,
-          ...(ideApprovalPolicy && { approvalPolicy: ideApprovalPolicy }),
-          ...(config.sandboxMode && { sandbox: config.sandboxMode }),
-        },
-      });
-    }
-
+    const createIde = () => new CodexIdeAdapter({
+      socketDirectoryPath: config.ideSocketDirectoryPath,
+      newThreadParams: {
+        cwd: targetRepositoryPath,
+        // Without an explicit target repo, open new threads in the IDE's own workspace.
+        preferIdeWorkspace: environment.RELAY_TARGET_REPO === undefined,
+        ...(ideApprovalPolicy && { approvalPolicy: ideApprovalPolicy }),
+        ...(config.sandboxMode && { sandbox: config.sandboxMode }),
+      },
+      showInIde: createShowInIde(environment),
+    });
     // Only CLI mode needs the Codex binary.
-    if (!config.binaryPath) {
-      throw new Error(
-        "Codex binary not found. Install the Codex VS Code extension or set RELAY_CODEX_BINARY.",
-      );
-    }
-    return new CodexCliAdapter({
-      command: config.binaryPath,
+    const createCli = (binaryPath: string) => new CodexCliAdapter({
+      command: binaryPath,
       commandArguments: ["app-server"],
       // Keep only variables Codex needs, such as PATH and its configured binary.
       environment: pickEnvironment({
@@ -55,6 +47,26 @@ export const codexAgentModule: AgentModule = {
       approvalPolicy: config.approvalPolicy,
       sandboxMode: config.sandboxMode,
     });
+
+    const chosenMode = environment.RELAY_CODEX_MODE;
+    if (humanApprovalChannel === "automatic") {
+      // Unless a mode is chosen, use the IDE whenever a Codex window is open, so the human sees it.
+      if (chosenMode === "ide" || !config.binaryPath) return createIde();
+      if (chosenMode === "cli") return createCli(config.binaryPath);
+      return new IdeFirstAdapter({
+        ide: createIde(),
+        cli: createCli(config.binaryPath),
+        isIdeOpen: (status) => status.ideWrapperRunning === true,
+      });
+    }
+
+    if (config.mode === "ide" || humanApprovalChannel === "agent-ui") return createIde();
+    if (!config.binaryPath) {
+      throw new Error(
+        "Codex binary not found. Install the Codex VS Code extension or set RELAY_CODEX_BINARY.",
+      );
+    }
+    return createCli(config.binaryPath);
   },
 
   // Makes VS Code start the wrapper script instead of the Codex server.

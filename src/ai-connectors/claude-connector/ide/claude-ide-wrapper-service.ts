@@ -7,6 +7,7 @@ import { dirname } from "node:path";
 import { createInterface } from "node:readline";
 import type { Readable, Writable } from "node:stream";
 import { isRecord } from "../../../bridge/utils/is-record.js";
+import { removeWrapperWorkspace, writeWrapperWorkspace } from "../../../bridge/utils/ide-wrapper-workspace.js";
 import {
   buildUserLine,
   parseJsonLine,
@@ -19,6 +20,7 @@ import { parseIdeClientMessage, type IdeServerMessage } from "./claude-ide-proto
 
 // Request ids the relay makes up. Their replies are not forwarded: the extension never asked.
 const INJECTED_ID_PREFIX = "cross-agent-mcp-bridge:";
+export const WAITING_FOR_IDE_LINE = "[waiting for the Claude IDE session to finish its current turn]\n";
 // Owner only, so other users cannot send turns into the IDE.
 const SOCKET_DIRECTORY_MODE = 0o700;
 
@@ -27,6 +29,8 @@ export interface ClaudeIdeWrapperOptions {
   commandArguments: string[];
   environment: NodeJS.ProcessEnv;
   socketPath: string;
+  // The VS Code window's folder, noted next to the socket so the relay can find this window.
+  workspaceFolder?: string;
   // Normally this process's stdin and stdout.
   extensionInput: Readable;
   extensionOutput: Writable;
@@ -54,6 +58,8 @@ export class ClaudeIdeWrapperService {
   private isTurnActive = false;
   private readonly pendingApprovalIds = new Set<string>();
   private injectedTurn: InjectedTurn | undefined;
+  // A relay turn that arrived while the human was mid-turn or an approval was open.
+  private queuedTurn: { client: Socket; requestId: string; text: string } | undefined;
   private nextInjectedId = 1;
 
   constructor(private readonly options: ClaudeIdeWrapperOptions) {}
@@ -95,6 +101,7 @@ export class ClaudeIdeWrapperService {
       this.socketServer ? this.socketServer.close(() => resolve()) : resolve(),
     );
     await rm(this.options.socketPath, { force: true });
+    await removeWrapperWorkspace(this.options.socketPath);
   }
 
   readState(): WrapperState {
@@ -118,6 +125,7 @@ export class ClaudeIdeWrapperService {
       server.once("error", reject);
       server.listen(this.options.socketPath, resolve);
     });
+    if (this.options.workspaceFolder) await writeWrapperWorkspace(this.options.socketPath, this.options.workspaceFolder);
   }
 
   // Forward first and unchanged. Only then look at the line.
@@ -165,6 +173,7 @@ export class ClaudeIdeWrapperService {
     if (readResult(message)) {
       this.isTurnActive = false;
       this.pendingApprovalIds.clear();
+      this.startQueuedTurn();
     }
   }
 
@@ -207,6 +216,7 @@ export class ClaudeIdeWrapperService {
     // The relay left. Free the slot; the turn itself keeps running in the IDE.
     client.on("close", () => {
       if (this.injectedTurn?.client === client) this.injectedTurn = undefined;
+      if (this.queuedTurn?.client === client) this.queuedTurn = undefined;
     });
     createInterface({ input: client }).on("line", (line) => {
       const message = parseIdeClientMessage(line);
@@ -224,10 +234,15 @@ export class ClaudeIdeWrapperService {
   }
 
   // Only while the IDE is idle, so the relay never speaks over the human or an open approval.
+  // Otherwise the turn waits and starts as soon as the IDE's current turn ends.
   private injectTurn({ client, requestId, text }: { client: Socket; requestId: string; text: string }): void {
-    const refusal = this.describeRefusal();
-    if (refusal) {
-      this.sendToClient(client, { type: "error", requestId, message: refusal });
+    if (this.injectedTurn || this.queuedTurn) {
+      this.sendToClient(client, { type: "error", requestId, message: "A relayed turn is already running." });
+      return;
+    }
+    if (this.pendingApprovalIds.size > 0 || this.isTurnActive) {
+      this.queuedTurn = { client, requestId, text };
+      this.sendToClient(client, { type: "delta", requestId, text: WAITING_FOR_IDE_LINE });
       return;
     }
     this.isTurnActive = true;
@@ -236,17 +251,20 @@ export class ClaudeIdeWrapperService {
     this.sendToClient(client, { type: "accepted", requestId });
   }
 
-  private describeRefusal(): string | undefined {
-    if (this.pendingApprovalIds.size > 0) {
-      return "An approval is waiting in the Claude IDE. Answer it there, then try again.";
-    }
-    if (this.isTurnActive || this.injectedTurn) {
-      return "A turn is already in progress in the Claude IDE. Try again when it finishes.";
-    }
-    return undefined;
+  private startQueuedTurn(): void {
+    const queued = this.queuedTurn;
+    if (!queued) return;
+    this.queuedTurn = undefined;
+    if (!queued.client.destroyed) this.injectTurn(queued);
   }
 
   private interruptTurn(requestId: string): void {
+    if (this.queuedTurn?.requestId === requestId) {
+      const { client } = this.queuedTurn;
+      this.queuedTurn = undefined;
+      this.sendToClient(client, { type: "completed", requestId, status: "interrupted", errorMessage: null });
+      return;
+    }
     const turn = this.injectedTurn;
     if (!turn || turn.requestId !== requestId || turn.isInterruptRequested) return;
     turn.isInterruptRequested = true;

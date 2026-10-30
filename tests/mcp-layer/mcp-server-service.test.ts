@@ -30,6 +30,7 @@ async function withClient(run: (client: Client, directory: string) => Promise<vo
         yield { kind: "reply_complete", text: "" };
         return;
       }
+      if (request.messageText.startsWith("You are invited")) yield { kind: "reply_delta", text: `[cwd ${request.workingDirectory}] ` };
       yield* replyingAdapter.run(request);
     },
   };
@@ -201,17 +202,30 @@ test("list_agents and relay_status report every agent, including unavailable one
   });
 });
 
-test("invite_to_room posts an invitation, wakes the agent, and reports membership", async () => {
+async function waitForRoomMessage(client: Client, roomId: string, pattern: RegExp) {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const context = JSON.parse(textOf(await client.callTool({ name: "get_room_context", arguments: { roomId } }))) as { recentMessages: Array<{ participantId: string; message: string }> };
+    const found = context.recentMessages.find((message) => pattern.test(message.message));
+    if (found) return found;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.fail(`no room message matched ${pattern}`);
+}
+
+test("invite_to_room returns once the agent starts and posts its reply in the room", async () => {
   await withClient(async (client, directory) => {
     await client.callTool({ name: "create_room", arguments: { name: "backend", targetRepositoryPath: directory } });
-    const invited = JSON.parse(textOf(await client.callTool({ name: "invite_to_room", arguments: { roomId: "backend", agent: "alpha" } }))) as { joined: boolean; reply: string; taskId?: string };
-    // The fake agent only replies; it cannot call join_room, so membership is reported honestly as false.
-    assert.equal(invited.joined, false);
+    const invited = JSON.parse(textOf(await client.callTool({ name: "invite_to_room", arguments: { roomId: "backend", agent: "alpha" } }))) as { joined: boolean; status: string; next: string; reply?: string; taskId?: string };
+    // The relay records membership on invite, so the agent is a member even though the fake agent cannot call join_room.
+    assert.equal(invited.joined, true);
     assert.equal(invited.taskId, undefined);
-    assert.match(invited.reply, /alpha says/);
+    assert.equal(invited.status, "started");
+    assert.equal(invited.reply, undefined);
+    assert.match(invited.next, /get_room_context/);
     assert.deepEqual(JSON.parse(textOf(await client.callTool({ name: "list_room_tasks", arguments: { roomId: "backend" } }))), []);
-    const context = JSON.parse(textOf(await client.callTool({ name: "get_room_context", arguments: { roomId: "backend" } })));
-    assert.match(context.recentMessages.at(-1).message, /@alpha you are invited/);
+    await waitForRoomMessage(client, "backend", /@alpha you are invited/);
+    const finished = await waitForRoomMessage(client, "backend", /^Finished: .*alpha says/);
+    assert.equal(finished.participantId, "alpha");
     const unknown = await client.callTool({ name: "invite_to_room", arguments: { roomId: "backend", agent: "nobody" } });
     assert.equal(unknown.isError, true);
   });
@@ -220,20 +234,34 @@ test("invite_to_room posts an invitation, wakes the agent, and reports membershi
 test("invite_to_room creates an assigned task before waking the agent", async () => {
   await withClient(async (client, directory) => {
     await client.callTool({ name: "create_room", arguments: { name: "backend", targetRepositoryPath: directory } });
-    const invited = JSON.parse(textOf(await client.callTool({ name: "invite_to_room", arguments: { roomId: "backend", agent: "alpha", task: "Review the API", note: "Check error handling." } }))) as { taskId: string; reply: string; joined: boolean };
+    const invited = JSON.parse(textOf(await client.callTool({ name: "invite_to_room", arguments: { roomId: "backend", agent: "alpha", task: "Review the API", note: "Check error handling.", waitForReply: true } }))) as { taskId: string; reply: string; joined: boolean };
     assert.match(invited.taskId, /^task-/);
-    assert.equal(invited.joined, false);
+    assert.equal(invited.joined, true);
     const tasks = JSON.parse(textOf(await client.callTool({ name: "list_room_tasks", arguments: { roomId: "backend" } }))) as Array<{ taskId: string; assignedTo: string; status: string; content: string }>;
     assert.equal(tasks.length, 1);
     assert.deepEqual([tasks[0]?.taskId, tasks[0]?.assignedTo, tasks[0]?.status], [invited.taskId, "alpha", "open"]);
     assert.match(tasks[0]?.content ?? "", /Review the API/);
     const context = JSON.parse(textOf(await client.callTool({ name: "get_room_context", arguments: { roomId: "backend" } }))) as { recentMessages: Array<{ message: string }> };
-    const invitation = context.recentMessages.at(-1)?.message ?? "";
+    const invitation = context.recentMessages.find((message) => message.message.includes("you are invited"))?.message ?? "";
     for (const text of [invitation, invited.reply]) {
       assert.match(text, new RegExp(invited.taskId));
-      for (const tool of ["join_room", "get_room_onboarding", "set_task_status", "update_task", "publish_knowledge", "publish_decision"]) assert.match(text, new RegExp(tool));
+      for (const tool of ["get_room_onboarding", "set_task_status", "update_task", "publish_knowledge", "publish_decision"]) assert.match(text, new RegExp(tool));
       assert.match(text, /in_progress/);
       assert.match(text, /review or done/);
+    }
+  });
+});
+
+test("invite_to_room runs the agent in the room's own repository", async () => {
+  await withClient(async (client, directory) => {
+    const otherRepository = await mkdtemp(join(tmpdir(), "cross-agent-mcp-bridge-other-"));
+    try {
+      const room = JSON.parse(textOf(await client.callTool({ name: "create_room", arguments: { name: "frontend", targetRepositoryPath: otherRepository } }))) as { roomId: string };
+      assert.notEqual(otherRepository, directory);
+      const invited = JSON.parse(textOf(await client.callTool({ name: "invite_to_room", arguments: { roomId: room.roomId, agent: "alpha", waitForReply: true } }))) as { reply: string };
+      assert.ok(invited.reply.includes(`[cwd ${otherRepository}]`), invited.reply);
+    } finally {
+      await rm(otherRepository, { recursive: true, force: true });
     }
   });
 });

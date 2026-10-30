@@ -4,6 +4,7 @@ import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { IdeFirstAdapter } from "../../../src/bridge/ide-first-adapter.js";
 import { claudeAgentModule } from "../../../src/ai-connectors/claude-connector/claude-agent-module.js";
 import { findClaudeBinary } from "../../../src/ai-connectors/claude-connector/claude-config.js";
 import { ClaudeCliAdapter } from "../../../src/ai-connectors/claude-connector/cli/claude-cli-adapter.js";
@@ -72,8 +73,14 @@ test("picks the adapter by mode and approval channel", () => {
   assert.ok(ide instanceof ClaudeIdeAdapter);
   const agentUi = claudeAgentModule.createAdapter({ ...baseInput, environment: {}, humanApprovalChannel: "agent-ui" });
   assert.ok(agentUi instanceof AgentHostIdeAdapter);
-  const automatic = claudeAgentModule.createAdapter({ ...baseInput, environment: { RELAY_CLAUDE_BINARY: "/fake/claude", RELAY_CLAUDE_MODE: "ide" }, humanApprovalChannel: "automatic" });
-  assert.ok(automatic instanceof ClaudeCliAdapter);
+  // By default each turn uses the Claude Code panel when a window has it open, else the CLI.
+  const automatic = claudeAgentModule.createAdapter({ ...baseInput, environment: { RELAY_CLAUDE_BINARY: "/fake/claude" }, humanApprovalChannel: "automatic" });
+  assert.ok(automatic instanceof IdeFirstAdapter);
+  const automaticCli = claudeAgentModule.createAdapter({ ...baseInput, environment: { RELAY_CLAUDE_BINARY: "/fake/claude", RELAY_CLAUDE_MODE: "cli" }, humanApprovalChannel: "automatic" });
+  assert.ok(automaticCli instanceof ClaudeCliAdapter);
+  // An explicit IDE mode wins over the CLI, so the turn shows in the Claude Code panel.
+  const automaticIde = claudeAgentModule.createAdapter({ ...baseInput, environment: { RELAY_CLAUDE_BINARY: "/fake/claude", RELAY_CLAUDE_MODE: "ide" }, humanApprovalChannel: "automatic" });
+  assert.ok(automaticIde instanceof ClaudeIdeAdapter);
 });
 
 test("declares the VS Code setting that routes Claude through the wrapper", () => {
